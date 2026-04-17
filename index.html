@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spin Wheel">
+<meta name="theme-color" content="#1a2e22">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Spin Wheel</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -12,9 +19,13 @@
     font-family: 'Nunito', sans-serif;
     background: #f0f7f2;
     min-height: 100vh;
+    min-height: -webkit-fill-available;
     display: flex; flex-direction: column; align-items: center;
-    padding-bottom: 80px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
     color: #1a2e22;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: pan-y;
+    overscroll-behavior: none;
   }
 
   /* ── HEADER ── */
@@ -593,6 +604,70 @@ wheelTitle.textContent = wheels[activeIdx].name;
 renderDrawer();
 renderItems();
 drawWheel();
+
+// ── TOUCH DRAG FOR ITEM REORDER ──
+let touchDragSrc = null;
+let touchClone = null;
+
+itemsList.addEventListener('touchstart', e => {
+  const li = e.target.closest('li.sw-item');
+  if (!li || e.target.classList.contains('sw-del')) return;
+  touchDragSrc = parseInt(li.dataset.idx);
+  // create visual clone
+  touchClone = li.cloneNode(true);
+  touchClone.style.cssText = `position:fixed;opacity:.8;pointer-events:none;z-index:999;width:${li.offsetWidth}px;background:white;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);`;
+  document.body.appendChild(touchClone);
+  const r = li.getBoundingClientRect();
+  touchClone.style.top = r.top + 'px';
+  touchClone.style.left = r.left + 'px';
+  li.style.opacity = '.3';
+}, { passive: true });
+
+itemsList.addEventListener('touchmove', e => {
+  if (touchDragSrc === null || !touchClone) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  touchClone.style.top = (t.clientY - 24) + 'px';
+  touchClone.style.left = touchClone.style.left;
+  // find which li we're hovering over
+  touchClone.style.display = 'none';
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  touchClone.style.display = '';
+  const overLi = el && el.closest('li.sw-item');
+  document.querySelectorAll('.sw-item').forEach(l => l.classList.remove('drag-over'));
+  if (overLi) overLi.classList.add('drag-over');
+}, { passive: false });
+
+itemsList.addEventListener('touchend', e => {
+  if (touchDragSrc === null) return;
+  if (touchClone) { touchClone.remove(); touchClone = null; }
+  document.querySelectorAll('.sw-item').forEach(l => {
+    l.style.opacity = '';
+    l.classList.remove('drag-over');
+  });
+  const t = e.changedTouches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const overLi = el && el.closest('li.sw-item');
+  if (overLi) {
+    const targetIdx = parseInt(overLi.dataset.idx);
+    if (targetIdx !== touchDragSrc) {
+      const arr = wheels[activeIdx].items;
+      const [moved] = arr.splice(touchDragSrc, 1);
+      arr.splice(targetIdx, 0, moved);
+      renderItems(); drawWheel();
+    }
+  }
+  touchDragSrc = null;
+});
+
+// ── SERVICE WORKER (PWA) ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(r => console.log('SW registered:', r.scope))
+      .catch(e => console.log('SW failed:', e));
+  });
+}
 </script>
 </body>
 </html>
