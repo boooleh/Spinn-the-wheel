@@ -329,11 +329,17 @@ const SWATCHES = [
   ['#f47c3c','#8bc34a','#607d8b','#e91e8c'],
   ['#9b59b6','#e8515a','#00bcd4','#f5c842'],
 ];
-
 const DEFAULT_WHEELS = [
   { name: 'Stuff to do', items: ['Städa köket','Fixa disken','Plocka undan på bordet','Städa hallen','Släng soporna','Dammsug 1 rum','Städa badrum','Städa toaletten','Städa vardagsrum','Sortera tvätt','Städa matsal','Städa sovrum','Gör matlådor','Baka något','30 min promenad','Städa skrivbord'] },
   { name: 'Middag?', items: ['Pizza','Pasta','Soppa','Tacos','Sushi','Sallad','Gryta','Hamburgare'] },
 ];
+
+let wheels = JSON.parse(JSON.stringify(DEFAULT_WHEELS));
+let activeIdx = 0;
+let angle = 0;
+let spinning = false;
+let modalMode = 'create';
+let dragSrc = null;
 
 function load() {
   try {
@@ -350,16 +356,9 @@ function load() {
 function save() {
   try {
     localStorage.setItem('sw_wheels', JSON.stringify(wheels));
-    localStorage.setItem('sw_activeIdx', activeIdx);
+    localStorage.setItem('sw_activeIdx', String(activeIdx));
   } catch(e) {}
 }
-
-let wheels = DEFAULT_WHEELS;
-let activeIdx = 0;
-let angle = 0;
-let spinning = false;
-let modalMode = 'create';
-let dragSrc = null;
 
 // DOM
 const canvas      = document.getElementById('wheel');
@@ -390,14 +389,16 @@ function drawWheel() {
   tooFewEl.classList.toggle('visible', n < 2);
   itemCount.textContent = `Items (${n})`;
 
-  // Hi-DPI / retina fix
+  // Hi-DPI / retina fix — reset transform each call to avoid stacking
   const dpr = window.devicePixelRatio || 1;
   const size = 310;
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
-  canvas.style.width = size + 'px';
-  canvas.style.height = size + 'px';
-  ctx.scale(dpr, dpr);
+  if (canvas.width !== size * dpr) {
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   ctx.clearRect(0, 0, size, size);
   if (!n) return;
@@ -568,7 +569,10 @@ function startInlineEdit(li, idx, textSpan) {
   input.value = items()[idx];
   li.replaceChild(input, textSpan);
   input.focus();
+  let committed = false;
   function commit() {
+    if (committed) return;
+    committed = true;
     const val = input.value.trim();
     if (val) wheels[activeIdx].items[idx] = val;
     save();
@@ -577,7 +581,7 @@ function startInlineEdit(li, idx, textSpan) {
   input.addEventListener('blur', commit);
   input.addEventListener('keydown', e => {
     if (e.key==='Enter') { input.blur(); }
-    if (e.key==='Escape') { renderItems(); }
+    if (e.key==='Escape') { committed = true; renderItems(); }
   });
 }
 
