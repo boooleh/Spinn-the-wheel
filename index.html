@@ -315,6 +315,14 @@
   </div>
 </div>
 
+<div id="saveError" style="
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+  background:#e8515a; color:white; padding:10px 20px; border-radius:12px;
+  font-family:'Nunito',sans-serif; font-weight:700; font-size:13px;
+  z-index:200; opacity:0; transition:opacity .3s; pointer-events:none;
+  white-space:nowrap; box-shadow:0 4px 16px rgba(0,0,0,.2);
+">⚠️ Could not save — try disabling private browsing</div>
+
 <script>
 const PALETTE = [
   '#e8515a','#f47c3c','#f5c842','#3db86b','#4a90d9',
@@ -346,18 +354,42 @@ function load() {
     const saved = localStorage.getItem('sw_wheels');
     const savedIdx = localStorage.getItem('sw_activeIdx');
     if (saved) {
-      wheels = JSON.parse(saved);
-      activeIdx = parseInt(savedIdx) || 0;
-      if (activeIdx >= wheels.length) activeIdx = 0;
+      const parsed = JSON.parse(saved);
+      // validate it's a proper array of wheels
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name && Array.isArray(parsed[0].items)) {
+        wheels = parsed;
+        activeIdx = parseInt(savedIdx) || 0;
+        if (activeIdx >= wheels.length) activeIdx = 0;
+      }
     }
-  } catch(e) {}
+  } catch(e) {
+    console.warn('SpinWheel: failed to load saved data', e);
+    wheels = JSON.parse(JSON.stringify(DEFAULT_WHEELS));
+    activeIdx = 0;
+  }
 }
 
 function save() {
   try {
-    localStorage.setItem('sw_wheels', JSON.stringify(wheels));
+    const data = JSON.stringify(wheels);
+    localStorage.setItem('sw_wheels', data);
     localStorage.setItem('sw_activeIdx', String(activeIdx));
-  } catch(e) {}
+    // verify the write actually stuck
+    const check = localStorage.getItem('sw_wheels');
+    if (check !== data) throw new Error('Verification failed');
+  } catch(e) {
+    console.warn('SpinWheel: could not save data.', e.message);
+    // show a brief toast so the user knows
+    showSaveError();
+  }
+}
+
+function showSaveError() {
+  const el = document.getElementById('saveError');
+  if (!el) return;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = '0'; }, 3000);
 }
 
 // DOM
